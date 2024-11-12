@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-
 class MCR(nn.Module):
     def __init__(self, weights, spectra):
         """
@@ -19,6 +18,14 @@ class MCR(nn.Module):
         super(MCR, self).__init__()
         self.weights = weights
         self.spectra = spectra
+
+        # Initialize gradient masks with all ones (meaning everything is trainable)
+        self.weights_grad_mask = torch.ones_like(self.weights.matrix, dtype=torch.float32)
+        self.spectra_grad_mask = torch.ones_like(self.spectra.matrix, dtype=torch.float32)
+
+        # Register hooks to apply gradient masks
+        self.weights.matrix.register_hook(self._apply_weights_grad_mask)
+        self.spectra.matrix.register_hook(self._apply_spectra_grad_mask)
 
     def forward(self, **kwargs):
         """
@@ -42,88 +49,110 @@ class MCR(nn.Module):
         result = torch.matmul(weights_result, spectra_result)
         return result
 
+    def _apply_weights_grad_mask(self, grad):
+        """
+        Apply the weights gradient mask to the computed gradient during backpropagation.
+        """
+        return grad * self.weights_grad_mask
+
+    def _apply_spectra_grad_mask(self, grad):
+        """
+        Apply the spectra gradient mask to the computed gradient during backpropagation.
+        """
+        return grad * self.spectra_grad_mask
+
     def freeze_weights(self, row_indices=None, col_indices=None, coords=None):
         """
-        Freeze specific weight parameters by setting requires_grad to False.
-        
+        Freeze specific weight parameters by updating the gradient mask.
+
         Parameters:
-            row_indices (list, optional): List of row indices to freeze entirely
-            col_indices (list, optional): List of column indices to freeze entirely
-            coords (list of tuples, optional): List of (row,col) coordinates to freeze specific values
+            row_indices (list, optional): List of row indices to freeze entirely.
+            col_indices (list, optional): List of column indices to freeze entirely.
+            coords (list of tuples, optional): List of (row, col) coordinates to freeze specific values.
+            If no parameters are provided, freeze all weights.
         """
-        weight_matrix = next(self.weights.parameters())
-        weight_matrix.requires_grad_(True)
-        
-        if row_indices is not None:
-            weight_matrix.data[row_indices, :].requires_grad_(False)
+        if row_indices is None and col_indices is None and coords is None:
+            # Freeze all weights if no arguments are provided
+            self.weights_grad_mask[:] = 0
+        else:
+            if row_indices is not None:
+                self.weights_grad_mask[row_indices, :] = 0
             
-        if col_indices is not None:
-            weight_matrix.data[:, col_indices].requires_grad_(False)
-            
-        if coords is not None:
-            rows, cols = zip(*coords)
-            weight_matrix.data[rows, cols].requires_grad_(False)
+            if col_indices is not None:
+                self.weights_grad_mask[:, col_indices] = 0
+
+            if coords is not None:
+                rows, cols = zip(*coords)
+                self.weights_grad_mask[rows, cols] = 0
 
     def unfreeze_weights(self, row_indices=None, col_indices=None, coords=None):
         """
-        Unfreeze specific weight parameters by setting requires_grad to True.
-        
+        Unfreeze specific weight parameters by updating the gradient mask.
+
         Parameters:
-            row_indices (list, optional): List of row indices to unfreeze entirely
-            col_indices (list, optional): List of column indices to unfreeze entirely
-            coords (list of tuples, optional): List of (row,col) coordinates to unfreeze specific values
+            row_indices (list, optional): List of row indices to unfreeze entirely.
+            col_indices (list, optional): List of column indices to unfreeze entirely.
+            coords (list of tuples, optional): List of (row, col) coordinates to unfreeze specific values.
+            If no parameters are provided, unfreeze all weights.
         """
-        weight_matrix = next(self.weights.parameters())
-        
-        if row_indices is not None:
-            weight_matrix.data[row_indices, :].requires_grad_(True)
+        if row_indices is None and col_indices is None and coords is None:
+            # Unfreeze all weights if no arguments are provided
+            self.weights_grad_mask[:] = 1
+        else:
+            if row_indices is not None:
+                self.weights_grad_mask[row_indices, :] = 1
             
-        if col_indices is not None:
-            weight_matrix.data[:, col_indices].requires_grad_(True)
-            
-        if coords is not None:
-            rows, cols = zip(*coords)
-            weight_matrix.data[rows, cols].requires_grad_(True)
+            if col_indices is not None:
+                self.weights_grad_mask[:, col_indices] = 1
+
+            if coords is not None:
+                rows, cols = zip(*coords)
+                self.weights_grad_mask[rows, cols] = 1
 
     def freeze_spectra(self, row_indices=None, col_indices=None, coords=None):
         """
-        Freeze specific spectra parameters by setting requires_grad to False.
-        
+        Freeze specific spectra parameters by updating the gradient mask.
+
         Parameters:
-            row_indices (list, optional): List of row indices to freeze entirely
-            col_indices (list, optional): List of column indices to freeze entirely
-            coords (list of tuples, optional): List of (row,col) coordinates to freeze specific values
+            row_indices (list, optional): List of row indices to freeze entirely.
+            col_indices (list, optional): List of column indices to freeze entirely.
+            coords (list of tuples, optional): List of (row, col) coordinates to freeze specific values.
+            If no parameters are provided, freeze all spectra.
         """
-        spectra_matrix = next(self.spectra.parameters())
-        spectra_matrix.requires_grad_(True)
-        
-        if row_indices is not None:
-            spectra_matrix.data[row_indices, :].requires_grad_(False)
+        if row_indices is None and col_indices is None and coords is None:
+            # Freeze all spectra if no arguments are provided
+            self.spectra_grad_mask[:] = 0
+        else:
+            if row_indices is not None:
+                self.spectra_grad_mask[row_indices, :] = 0
             
-        if col_indices is not None:
-            spectra_matrix.data[:, col_indices].requires_grad_(False)
-            
-        if coords is not None:
-            rows, cols = zip(*coords)
-            spectra_matrix.data[rows, cols].requires_grad_(False)
+            if col_indices is not None:
+                self.spectra_grad_mask[:, col_indices] = 0
+
+            if coords is not None:
+                rows, cols = zip(*coords)
+                self.spectra_grad_mask[rows, cols] = 0
 
     def unfreeze_spectra(self, row_indices=None, col_indices=None, coords=None):
         """
-        Unfreeze specific spectra parameters by setting requires_grad to True.
-        
+        Unfreeze specific spectra parameters by updating the gradient mask.
+
         Parameters:
-            row_indices (list, optional): List of row indices to unfreeze entirely
-            col_indices (list, optional): List of column indices to unfreeze entirely
-            coords (list of tuples, optional): List of (row,col) coordinates to unfreeze specific values
+            row_indices (list, optional): List of row indices to unfreeze entirely.
+            col_indices (list, optional): List of column indices to unfreeze entirely.
+            coords (list of tuples, optional): List of (row, col) coordinates to unfreeze specific values.
+            If no parameters are provided, unfreeze all spectra.
         """
-        spectra_matrix = next(self.spectra.parameters())
-        
-        if row_indices is not None:
-            spectra_matrix.data[row_indices, :].requires_grad_(True)
+        if row_indices is None and col_indices is None and coords is None:
+            # Unfreeze all spectra if no arguments are provided
+            self.spectra_grad_mask[:] = 1
+        else:
+            if row_indices is not None:
+                self.spectra_grad_mask[row_indices, :] = 1
             
-        if col_indices is not None:
-            spectra_matrix.data[:, col_indices].requires_grad_(True)
-            
-        if coords is not None:
-            rows, cols = zip(*coords)
-            spectra_matrix.data[rows, cols].requires_grad_(True)
+            if col_indices is not None:
+                self.spectra_grad_mask[:, col_indices] = 1
+
+            if coords is not None:
+                rows, cols = zip(*coords)
+                self.spectra_grad_mask[rows, cols] = 1
