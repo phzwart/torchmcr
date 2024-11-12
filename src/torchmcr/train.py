@@ -2,8 +2,16 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
-def train_mcr_model(model, observed_data, num_epochs=1000, mini_epochs=5, lr=0.01, tolerance=1e-16,
-                    optimizer_class=None, loss_fn=None, device=None):
+def train_mcr_model(model, 
+                    observed_data, 
+                    num_epochs=1000, 
+                    mini_epochs=5, 
+                    lr=0.01, 
+                    tolerance=1e-16,
+                    optimizer_class=None, 
+                    loss_fn=None, 
+                    device=None, 
+                    show_every=10):
     """
     Train the MCR model with alternating updates for spectra and weights, using custom optimizer and loss function.
 
@@ -18,6 +26,7 @@ def train_mcr_model(model, observed_data, num_epochs=1000, mini_epochs=5, lr=0.0
                                          If None, defaults to Adam.
         loss_fn (callable, optional): Loss function to use. If None, defaults to L1 loss (Mean Absolute Error).
         device (torch.device, optional): Device to run the model on (CPU or GPU).
+        show_every (int): Frequency of loss printing.
 
     Returns:
         None
@@ -106,7 +115,7 @@ def train_mcr_model(model, observed_data, num_epochs=1000, mini_epochs=5, lr=0.0
         epoch_loss /= mini_epochs
 
         # Print loss and check for early stopping condition
-        if epoch % 10 == 0 or epoch == num_epochs - 1:
+        if epoch % show_every == 0 or epoch == num_epochs - 1:
             print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {epoch_loss:.6f}")
 
         # Early stopping condition if the change in loss is small
