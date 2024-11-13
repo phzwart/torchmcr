@@ -45,18 +45,23 @@ def train_mcr_model(model,
         loss_fn = F.l1_loss  # L1 loss (Mean Absolute Error)
 
     # Conditionally create optimizers if there are parameters that require gradients
-    if model.spectra.requires_grad:
-        spectra_optimizer = optimizer_class([model.spectra], lr=lr)
+    # Check if any parameters in spectra require gradients
+    spectra_requires_grad = any(p.requires_grad for p in model.spectra.parameters())
+    if spectra_requires_grad:
+        spectra_optimizer = optimizer_class(model.spectra.parameters(), lr=lr)
     else:
         spectra_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
-    if model.weights.requires_grad:
-        weights_optimizer = optimizer_class([model.weights], lr=lr)
+    # Check if any parameters in weights require gradients
+    weights_requires_grad = any(p.requires_grad for p in model.weights.parameters())
+    if weights_requires_grad:
+        weights_optimizer = optimizer_class(model.weights.parameters(), lr=lr)
     else:
         weights_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
-    # Use closure for LBFGS
+    # Use closure for LBFGS and set retain_graph=True for multiple backward passes
     use_closure = optimizer_class == optim.LBFGS
+
 
     # Track loss for early stopping
     prev_loss = float('inf')
@@ -65,51 +70,53 @@ def train_mcr_model(model,
         epoch_loss = 0.0  # Initialize epoch loss
 
         # Run mini-epochs for spectra and weights separately
-        for mini_epoch in range(mini_epochs):
-            # Update spectra while keeping weights fixed
-            if spectra_optimizer:
+        if spectra_optimizer is not None:
+            spectra_optimizer.zero_grad()
+        if weights_optimizer is not None:
+            weights_optimizer.zero_grad()
+
+        if spectra_optimizer is not None:
+            for mini_epoch in range(mini_epochs):
                 if use_closure:
                     # Define a closure function for LBFGS and run optimizer
                     def spectra_closure():
                         spectra_optimizer.zero_grad()
                         predicted_data = model()
                         loss = loss_fn(predicted_data, observed_data)
-                        loss.backward()
+                        loss.backward(retain_graph=True)
                         return loss
-
                     loss = spectra_optimizer.step(spectra_closure)  # Update spectra with LBFGS
                 else:
                     spectra_optimizer.zero_grad()
                     predicted_data = model()  # Forward pass with current weights and spectra
                     loss = loss_fn(predicted_data, observed_data)
-                    loss.backward()  # Backward pass for spectra only
+                    loss.backward(retain_graph=True)  # Backward pass for spectra only
                     spectra_optimizer.step()  # Update spectra
-            else:
-                # No update for spectra; just compute the loss
-                predicted_data = model()
-                loss = loss_fn(predicted_data, observed_data)
+        else:
+            # No update for spectra; just compute the loss
+            predicted_data = model()
+            loss = loss_fn(predicted_data, observed_data)
 
-            # Update weights while keeping spectra fixed
-            if weights_optimizer:
+        # Update weights while keeping spectra fixed
+        if weights_optimizer is not None:
+            for mini_epoch in range(mini_epochs):
                 if use_closure:
                     # Define a closure function for LBFGS and run optimizer
                     def weights_closure():
                         weights_optimizer.zero_grad()
                         predicted_data = model()
                         loss = loss_fn(predicted_data, observed_data)
-                        loss.backward()
+                        loss.backward(retain_graph=True)
                         return loss
-
                     loss = weights_optimizer.step(weights_closure)  # Update weights with LBFGS
                 else:
                     weights_optimizer.zero_grad()
                     predicted_data = model()  # Forward pass with updated spectra
                     loss = loss_fn(predicted_data, observed_data)
-                    loss.backward()  # Backward pass for weights only
+                    loss.backward(retain_graph=True)  # Backward pass for weights only
                     weights_optimizer.step()  # Update weights
 
-            # Accumulate loss for the epoch (use latest mini-batch loss)
-            epoch_loss += loss.item()
+        epoch_loss += loss.item()
 
         # Compute average epoch loss
         epoch_loss /= mini_epochs
