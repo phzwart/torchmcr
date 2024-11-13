@@ -71,3 +71,6 @@ class SimpleMCRModel(MCR):
         weights = SimpleWeights(M_samples, K_components, preload_weights=preload_weights, modifier=weights_modifier)
         spectra = SimpleSpectra(K_components, N_waves, preload_spectra=preload_spectra, modifier=spectra_modifier)
         super(SimpleMCRModel, self).__init__(weights, spectra)
+        # No additional initialization needed for SimpleMCRModel
+        # All functionality is inherited from MCR base class
+        pass

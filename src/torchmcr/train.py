@@ -10,7 +10,7 @@ def train_mcr_model(model,
                     tolerance=1e-16,
                     optimizer_class=None, 
                     loss_fn=None, 
-                    device=None, 
+                    device='cpu', 
                     show_every=10):
     """
     Train the MCR model with alternating updates for spectra and weights, using custom optimizer and loss function.
@@ -32,7 +32,7 @@ def train_mcr_model(model,
         None
     """
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = observed_data.device
 
     # Move model and data to the specified device
     model = model.to(device)
@@ -45,15 +45,15 @@ def train_mcr_model(model,
         loss_fn = F.l1_loss  # L1 loss (Mean Absolute Error)
 
     # Conditionally create optimizers if there are parameters that require gradients
-    if any(p.requires_grad for p in model.spectra.parameters()):
-        spectra_optimizer = optimizer_class(filter(lambda p: p.requires_grad, model.spectra.parameters()), lr=lr)
+    if model.spectra.requires_grad:
+        spectra_optimizer = optimizer_class([model.spectra], lr=lr)
     else:
-        spectra_optimizer = None
+        spectra_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
-    if any(p.requires_grad for p in model.weights.parameters()):
-        weights_optimizer = optimizer_class(filter(lambda p: p.requires_grad, model.weights.parameters()), lr=lr)
+    if model.weights.requires_grad:
+        weights_optimizer = optimizer_class([model.weights], lr=lr)
     else:
-        weights_optimizer = None
+        weights_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
     # Use closure for LBFGS
     use_closure = optimizer_class == optim.LBFGS
@@ -126,4 +126,4 @@ def train_mcr_model(model,
         # Update the previous loss
         prev_loss = epoch_loss
 
-    print("Training complete.")
+    assert "Training complete."

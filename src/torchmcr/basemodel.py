@@ -20,12 +20,19 @@ class MCR(nn.Module):
         self.spectra = spectra
 
         # Initialize gradient masks with all ones (meaning everything is trainable)
-        self.weights_grad_mask = torch.ones_like(self.weights.matrix, dtype=torch.float32)
-        self.spectra_grad_mask = torch.ones_like(self.spectra.matrix, dtype=torch.float32)
+        # Get initial shapes from a forward pass
+        with torch.no_grad():
+            weights_shape = self.weights().shape
+            spectra_shape = self.spectra().shape
+        
+        self.weights_grad_mask = torch.ones(weights_shape, dtype=torch.float32)
+        self.spectra_grad_mask = torch.ones(spectra_shape, dtype=torch.float32)
 
-        # Register hooks to apply gradient masks
-        self.weights.matrix.register_hook(self._apply_weights_grad_mask)
-        self.spectra.matrix.register_hook(self._apply_spectra_grad_mask)
+        # Register hooks on all parameters
+        for param in self.weights.parameters():
+            param.register_hook(self._apply_weights_grad_mask)
+        for param in self.spectra.parameters():
+            param.register_hook(self._apply_spectra_grad_mask)
 
     def forward(self, **kwargs):
         """
