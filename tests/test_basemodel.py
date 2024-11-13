@@ -190,3 +190,44 @@ def test_unfreeze_all_spectra(mcr_model):
     mcr_model.freeze_spectra()  # Freeze all spectra first
     mcr_model.unfreeze_spectra()  # Then unfreeze all spectra
     spectra_matrix = next(mcr_model.spectra.parameters())
+
+def test_freeze_unfreeze_with_coords():
+    """Test freezing and unfreezing specific coordinates in weights and spectra"""
+    # Create dummy weights and spectra modules
+    class DummyModule(nn.Module):
+        def __init__(self, matrix):
+            super().__init__()
+            self.matrix = nn.Parameter(matrix)
+        def forward(self):
+            return self.matrix
+
+    weights = DummyModule(torch.randn(4, 3))
+    spectra = DummyModule(torch.randn(3, 5))
+    
+    # Initialize MCR model
+    model = MCR(weights, spectra)
+    
+    # Test coordinates
+    coords = [(0, 1), (2, 0)]
+    
+    # Test freezing specific coordinates
+    model.freeze_weights(coords=coords)
+    assert model.weights_grad_mask[0, 1] == 0
+    assert model.weights_grad_mask[2, 0] == 0
+    
+    # Test unfreezing specific coordinates
+    model.unfreeze_weights(coords=coords)
+    assert model.weights_grad_mask[0, 1] == 1
+    assert model.weights_grad_mask[2, 0] == 1
+    
+    # Test with spectra
+    model.freeze_spectra(coords=coords)
+    assert model.spectra_grad_mask[0, 1] == 0
+    assert model.spectra_grad_mask[2, 0] == 0
+    
+    model.unfreeze_spectra(coords=coords)
+    assert model.spectra_grad_mask[0, 1] == 1
+    assert model.spectra_grad_mask[2, 0] == 1
+
+
+
