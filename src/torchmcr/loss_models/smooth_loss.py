@@ -88,3 +88,4 @@ class CustomLoss(torch.nn.Module):
         total_loss = total_loss + self.smooth_spectra_weight * smoothness_penalty_spectra
         
         return total_loss
+
