@@ -18,7 +18,6 @@ class SimpleMCRModel(nn.Module):
         return torch.matmul(self.weights, self.spectra)
 
 def test_train_mcr_model(device):
-    print(device)
     # Set random seed for reproducibility
     torch.manual_seed(42)
     
@@ -34,7 +33,7 @@ def test_train_mcr_model(device):
     
     # Create model and move it to the appropriate device
     model = SimpleMCRModel(n_components, n_wavelengths, n_timepoints).to(device)  # Move model to GPU
-    
+
     # Create synthetic ground truth and move it to the same device as the model
     observed_data = observed_data.to(device)  # Move observed data to GPU
     
