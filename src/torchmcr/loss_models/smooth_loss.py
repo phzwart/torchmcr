@@ -4,7 +4,7 @@ from torch import nn
 
 class SmoothLoss(torch.nn.Module):
     def __init__(self, 
-                 base_loss_fn=nn.MSELoss(), 
+                 base_loss_fn=F.l1_loss, 
                  smooth_spectra_weight=0.1,
                  smooth_weight_weight=0.1,                 
                 ):

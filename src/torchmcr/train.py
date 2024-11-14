@@ -46,18 +46,18 @@ def train_mcr_model(model,
 
     # Conditionally create optimizers if there are parameters that require gradients
     # Check if any parameters in spectra require gradients
-    spectra_requires_grad = any(p.requires_grad for p in model.spectra.parameters())
+    spectra_requires_grad = model.spectra.requires_grad
     if spectra_requires_grad:
-        spectra_optimizer = optimizer_class(model.spectra.parameters(), lr=lr)
+        spectra_optimizer = optimizer_class([model.spectra], lr=lr)
     else:
-        spectra_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
+        spectra_optimizer = None  # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
     # Check if any parameters in weights require gradients
-    weights_requires_grad = any(p.requires_grad for p in model.weights.parameters())
+    weights_requires_grad = model.weights.requires_grad
     if weights_requires_grad:
-        weights_optimizer = optimizer_class(model.weights.parameters(), lr=lr)
+        weights_optimizer = optimizer_class([model.weights], lr=lr)
     else:
-        weights_optimizer = None # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
+        weights_optimizer = None  # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
 
     # Use closure for LBFGS and set retain_graph=True for multiple backward passes
     use_closure = optimizer_class == optim.LBFGS
