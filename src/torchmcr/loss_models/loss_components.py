@@ -128,20 +128,7 @@ class SmoothnessPriorSpectra(MCRLossComponent):
         self.power = power
     
     def __call__(self, mcr_model, **kwargs):
-        """Compute smoothness penalty on spectra.
-        
-        Parameters
-        ----------
-        mcr_model : MCR
-            The MCR model instance
-        **kwargs : dict
-            Additional arguments, may include 'spectra_kwargs' dict
-            
-        Returns
-        -------
-        torch.Tensor
-            Weighted mean squared difference between adjacent spectral points
-        """
+        """Compute smoothness penalty on spectra."""
         spectra = mcr_model.spectra(**kwargs.get('spectra_kwargs', {}))
         spectra_scale = torch.mean(torch.abs(spectra))
 
