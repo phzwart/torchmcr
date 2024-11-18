@@ -1,92 +1,89 @@
 import pytest
 import torch
 import torch.nn.functional as F
-from torchmcr.loss_models.smooth_loss import SmoothLoss
+from torchmcr.loss_models.smooth_loss import BaseMSELoss, create_smooth_loss
 
-@pytest.fixture
-def loss_inputs():
-    """Fixture providing test input tensors"""
-    predicted = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-    target = torch.tensor([[1.1, 2.1, 3.1], [3.9, 4.9, 5.9]])
-    spectra = torch.tensor([[0.5, 1.0, 1.5], [2.0, 2.5, 3.0]])
-    weights = torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-    return predicted, target, spectra, weights
+class TestBaseMSELoss:
+    def test_init(self):
+        loss = BaseMSELoss()
+        assert loss.name == "base_mse"
+        assert loss.loss_fn == F.mse_loss
 
-def test_custom_loss_initialization():
-    """Test CustomLoss initialization with different parameters"""
-    # Test default initialization
-    loss_fn = SmoothLoss()
-    assert loss_fn.base_loss_fn == F.l1_loss
-    assert loss_fn.smooth_spectra_weight == 0.1
-    assert loss_fn.smooth_weight_weight == 0.1
-    
-    # Test custom initialization
-    loss_fn = SmoothLoss(
-        base_loss_fn=F.mse_loss,
-        smooth_spectra_weight=0.2,
-        smooth_weight_weight=0.3
-    )
-    assert loss_fn.base_loss_fn == F.mse_loss
-    assert loss_fn.smooth_spectra_weight == 0.2
-    assert loss_fn.smooth_weight_weight == 0.3
+    def test_call(self):
+        loss = BaseMSELoss()
+        predicted = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+        target = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+        
+        result = loss(None, predicted, target)
+        assert torch.isclose(result, torch.tensor(0.0))
 
-def test_custom_loss_forward(loss_inputs):
-    """Test forward pass of CustomLoss"""
-    predicted, target, spectra, weights = loss_inputs
-    loss_fn = SmoothLoss()
-    
-    # Test basic forward pass
-    loss = loss_fn(predicted, target, spectra, weights)
-    assert isinstance(loss, torch.Tensor)
-    assert loss.ndim == 0  # Should be a scalar
-    assert loss.item() > 0  # Loss should be positive
+        # Test with different values
+        predicted = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+        target = torch.tensor([[2.0, 3.0], [4.0, 5.0]])
+        result = loss(None, predicted, target)
+        assert result > 0.0
 
-def test_custom_loss_smoothness_penalties(loss_inputs):
-    """Test that smoothness penalties affect the loss appropriately"""
-    predicted, target, spectra, weights = loss_inputs
-    
-    # Create loss functions with different smoothness weights
-    loss_fn_base = SmoothLoss(smooth_spectra_weight=0.0, smooth_weight_weight=0.0)
-    loss_fn_smooth = SmoothLoss(smooth_spectra_weight=1.0, smooth_weight_weight=1.0)
-    
-    base_loss = loss_fn_base(predicted, target, spectra, weights)
-    smooth_loss = loss_fn_smooth(predicted, target, spectra, weights)
-    
-    # Loss with smoothness penalties should be larger
-    assert smooth_loss > base_loss
+class TestCreateSmoothLoss:
+    def test_default_parameters(self):
+        registry = create_smooth_loss()
+        
+        # Check if all components are registered
+        assert "base" in registry.losses
+        assert "spectra_smoothness" in registry.losses
+        assert "weight_smoothness" in registry.losses
+        assert "weight_products" in registry.losses
+        
+        # Check default weights
+        assert registry.weights["base"] == 1.0
+        assert registry.weights["spectra_smoothness"] == 0.1
+        assert registry.weights["weight_smoothness"] == 0.1
+        assert registry.weights["weight_products"] == 0.0
 
-def test_custom_loss_gradients(loss_inputs):
-    """Test that loss produces valid gradients"""
-    predicted, target, spectra, weights = loss_inputs
-    
-    # Make inputs require gradients
-    predicted.requires_grad_(True)
-    spectra.requires_grad_(True)
-    
-    loss_fn = SmoothLoss()
-    loss = loss_fn(predicted, target, spectra, weights)
-    
-    # Check if gradients can be computed
-    loss.backward()
-    
-    assert predicted.grad is not None
-    assert spectra.grad is not None
-    assert torch.any(predicted.grad != 0)
-    assert torch.any(spectra.grad != 0)
+    def test_custom_parameters(self):
+        registry = create_smooth_loss(
+            base_loss_fn=F.l1_loss,
+            smooth_spectra_weight=0.2,
+            smooth_weight_weight=0.3,
+            weight_cross_product_weight=0.4,
+            smoothness_power=3.0
+        )
+        
+        # Check if weights are properly set
+        assert registry.weights["spectra_smoothness"] == 0.2
+        assert registry.weights["weight_smoothness"] == 0.3
+        assert registry.weights["weight_products"] == 0.4
 
-def test_custom_loss_different_base_functions(loss_inputs):
-    """Test CustomLoss with different base loss functions"""
-    predicted, target, spectra, weights = loss_inputs
-    
-    # Test with MSE loss
-    loss_fn_mse = SmoothLoss(base_loss_fn=F.mse_loss)
-    mse_loss = loss_fn_mse(predicted, target, spectra, weights)
-    
-    # Test with L1 loss
-    loss_fn_l1 = SmoothLoss(base_loss_fn=F.l1_loss)
-    l1_loss = loss_fn_l1(predicted, target, spectra, weights)
-    
-    # Losses should be different but both valid
-    assert isinstance(mse_loss, torch.Tensor)
-    assert isinstance(l1_loss, torch.Tensor)
-    assert mse_loss.item() != l1_loss.item()
+    def test_loss_calculation(self):
+        registry = create_smooth_loss()
+        
+        # Create dummy data
+        batch_size = 2
+        n_components = 3
+        n_wavelengths = 4
+        n_timepoints = 5
+        
+        # Create mock MCR model with spectra as a property/method
+        class MockMCRModel:
+            def __init__(self):
+                self._spectra = torch.rand(n_components, n_wavelengths, requires_grad=True)
+                self._weights = torch.rand(batch_size, n_timepoints, n_components, requires_grad=True)
+            
+            def spectra(self, **kwargs):
+                return self._spectra
+            def weights(self, **kwargs):
+                return self._weights
+                
+        mcr_model = MockMCRModel()
+        predicted = torch.rand(batch_size, n_timepoints, n_wavelengths, requires_grad=True)
+        target = torch.rand(batch_size, n_timepoints, n_wavelengths)
+        
+        # Calculate total loss
+        total_loss, _ = registry.compute_total_loss(
+            mcr_model, 
+            predicted=predicted, 
+            target=target
+        )
+        
+        # Check if loss is a scalar and has gradient
+        assert isinstance(total_loss.item(), float)
+        assert total_loss.requires_grad
