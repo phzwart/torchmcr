@@ -5,7 +5,7 @@ from .loss_components import (
     DataLoss,
     SmoothnessPriorWeights,
     SmoothnessPriorSpectra,
-    WeightProductSumPrior
+    TopKWeightProductSumPrior
 )
 from .loss_registry import MCRLossRegistry
 
@@ -74,7 +74,7 @@ def create_smooth_loss(
     
     registry.register(
         "weight_products",
-        WeightProductSumPrior(factor=1.0),
+        TopKWeightProductSumPrior(factor=1.0, k=2),
         weight=weight_cross_product_weight
     )
     

@@ -176,3 +176,98 @@ class WeightProductSumPrior(MCRLossComponent):
         product_sum = torch.sum(weight_products)
         
         return self.factor * product_sum
+
+class TopKWeightProductSumPrior(MCRLossComponent):
+    """Loss component that penalizes the sum of products of top k weights across time.
+    
+    For each time point, multiplies the k largest weights together and then sums across
+    all time points to create a regularization term.
+    
+    Parameters
+    ----------
+    factor : float, optional
+        Weight factor for the penalty (default is 1.0)
+    k : int, optional
+        Number of largest weights to use in product (default is 2)
+    """
+    def __init__(self, factor: float = 1.0, k: int = 2):
+        super().__init__("top_k_weight_product_sum")
+        self.factor = factor
+        self.k = k
+    
+    def __call__(self, mcr_model, **kwargs):
+        """Compute product sum penalty using k largest weights.
+        
+        Parameters
+        ----------
+        mcr_model : MCR
+            The MCR model instance
+        **kwargs : dict
+            Additional arguments, may include 'weights_kwargs' dict
+            
+        Returns
+        -------
+        torch.Tensor
+            Sum of products of k largest weights across time points
+        """
+        weights = mcr_model.weights(**kwargs.get('weights_kwargs', {}))
+        
+        # Get top k values along component dimension for each time point
+        top_k_weights, _ = torch.topk(weights, k=min(self.k, weights.shape[-1]), dim=-1)
+        
+        # Multiply top k weights along component dimension for each time point
+        weight_products = torch.prod(top_k_weights, dim=-1)  # Shape: (N,)
+        
+        # Sum across time points
+        product_sum = torch.mean(weight_products)
+        
+        return self.factor * product_sum
+
+
+class ThresholdedWeightProductSumPrior(MCRLossComponent):
+    """Loss component that penalizes the sum of weight products across time,
+    but only when the product exceeds a threshold value.
+    
+    For each time point, multiplies all weights together and applies the penalty
+    only if the product is above the threshold value.
+    
+    Parameters
+    ----------
+    factor : float, optional
+        Weight factor for the penalty (default is 1.0)
+    threshold : float, optional
+        Threshold value below which no penalty is applied (default is 0.1)
+    """
+    def __init__(self, factor: float = 1.0, threshold: float = 0.1):
+        super().__init__("thresholded_weight_product_sum")
+        self.factor = factor
+        self.threshold = threshold
+    
+    def __call__(self, mcr_model, **kwargs):
+        """Compute thresholded weight product sum penalty.
+        
+        Parameters
+        ----------
+        mcr_model : MCR
+            The MCR model instance
+        **kwargs : dict
+            Additional arguments, may include 'weights_kwargs' dict
+            
+        Returns
+        -------
+        torch.Tensor
+            Sum of weight products across time points where product > threshold
+        """
+        weights = mcr_model.weights(**kwargs.get('weights_kwargs', {}))
+        
+        # Multiply weights along component dimension for each time point
+        weight_products = torch.prod(weights, dim=-1)  # Shape: (N,)
+        
+        # Zero out products below threshold using mask
+        mask = (weight_products > self.threshold)
+        masked_products = weight_products * mask
+        
+        # Sum across time points
+        product_sum = torch.sum(masked_products)
+        
+        return self.factor * product_sum
