@@ -46,11 +46,18 @@ def train_mcr_model(model,
 
     # Conditionally create optimizers if there are parameters that require gradients
     # Check if any parameters in spectra require gradients
-    spectra_requires_grad = model.spectra.requires_grad
-    if spectra_requires_grad:
-        spectra_optimizer = optimizer_class([model.spectra], lr=lr)
+    if isinstance(model.spectra, torch.nn.Parameter):
+        spectra_requires_grad = model.spectra.requires_grad
+        spectra_params = [model.spectra]
     else:
-        spectra_optimizer = None  # TODO: Check if this is correct, we use gradient weight matrix to allow for mixed / targeted updates
+        # Handle case where spectra is a neural network
+        spectra_requires_grad = any(p.requires_grad for p in model.spectra.parameters())
+        spectra_params = model.spectra.parameters()
+
+    if spectra_requires_grad:
+        spectra_optimizer = optimizer_class(spectra_params, lr=lr)
+    else:
+        spectra_optimizer = None
 
     # Check if any parameters in weights require gradients
     if isinstance(model.weights, torch.nn.Parameter):

@@ -1,6 +1,6 @@
 import torch
 
-def inverse_softplus(y):
+def inverse_softplus(y, eps=1e-4):
     """
     Computes the inverse of the softplus function.
     
@@ -21,7 +21,7 @@ def inverse_softplus(y):
     
     # Inverse softplus: ln(exp(y) - 1)
     # Use torch.where for numerical stability with small values
-    return torch.where(y > 1e-4, torch.log(torch.exp(y) - 1), y)
+    return torch.where(y > eps, torch.log(torch.exp(y) - 1), y)
 
 
 def normalized_softmax(x, scale_factor=None, dim=-1):
@@ -46,7 +46,7 @@ def normalized_softmax(x, scale_factor=None, dim=-1):
     # Since softmax sums to 1, multiply by scale_factor to get desired sum
     return softmaxed * scale_factor
 
-def inverse_normalized_softmax(y, scale_factor=None, dim=-1):
+def inverse_normalized_softmax(y, scale_factor=None, dim=-1, eps=1e-4):
     """
     Inverse of normalized_softmax function. First un-scales the input,
     then computes the inverse softmax (logits).
@@ -67,4 +67,4 @@ def inverse_normalized_softmax(y, scale_factor=None, dim=-1):
     
     # Inverse softmax (log of probabilities)
     # Add small epsilon to avoid log(0)
-    return torch.log(y_unscaled + 1e-10)
+    return torch.log(y_unscaled + eps)
